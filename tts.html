@@ -66,7 +66,6 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        /* Pagination Styles */
         .pagination {
             display: flex;
             justify-content: center;
@@ -161,7 +160,7 @@
             <h1 class="text-3xl font-bold text-center mb-6">Quản lý Audio</h1>
             <div id="audioList" class="space-y-4"></div>
             <div id="pagination" class="pagination"></div>
-            <button onclick="loadAudioList()" 
+            <button onclick="fetchAudioList()" 
                 class="w-full py-3 btn-primary rounded-lg font-semibold text-lg mt-6">
                 Tải Lại Danh Sách
             </button>
@@ -185,7 +184,8 @@
 
         // Pagination state
         let currentPage = 1;
-        const itemsPerPage = 5;
+        const itemsPerPage = 3;
+        let allAudios = []; // Store all audio data
 
         // Navigation
         navTts.addEventListener('click', () => {
@@ -200,7 +200,11 @@
             pageAudio.classList.remove('hidden');
             navTts.classList.remove('active');
             navAudio.classList.add('active');
-            loadAudioList();
+            if (allAudios.length === 0) {
+                fetchAudioList();
+            } else {
+                renderAudioList();
+            }
         });
 
         // Update slider value displays
@@ -305,7 +309,7 @@
                 const audioId = createData.result.audio_id;
 
                 let audioUrl = null;
-                const maxAttempts = 10;
+                const maxAttempts = 5;
                 let attempts = 0;
 
                 while (attempts < maxAttempts) {
@@ -342,9 +346,11 @@
                 audio.play().catch(error => {
                     throw new Error(`Lỗi phát audio: ${error.message}`);
                 });
+                // Refresh audio list after successful audio creation
+                await fetchAudioList();
             } catch (error) {
                 console.error('Lỗi:', error);
-                alert(`Đã xảy ra lỗi khi chuyển văn bản thành giọng nói: ${error.message}. Vui lòng kiểm tra kết nối mạng hoặc liên hệ AusyncLab.`);
+                alert(`Hệ thống đang xử lý. Hãy vào phần quản lý để xem lại trạng thái`);
             } finally {
                 speakButton.disabled = false;
                 speakSpinner.classList.add('hidden');
@@ -358,7 +364,6 @@
 
             if (totalPages <= 1) return;
 
-            // Previous button
             const prevButton = document.createElement('button');
             prevButton.className = 'pagination-button';
             prevButton.textContent = '«';
@@ -366,12 +371,11 @@
             prevButton.onclick = () => {
                 if (currentPage > 1) {
                     currentPage--;
-                    loadAudioList();
+                    renderAudioList();
                 }
             };
             pagination.appendChild(prevButton);
 
-            // Page numbers with ellipsis
             const maxVisiblePages = 5;
             let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
             let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
@@ -386,7 +390,7 @@
                 firstPage.textContent = '1';
                 firstPage.onclick = () => {
                     currentPage = 1;
-                    loadAudioList();
+                    renderAudioList();
                 };
                 pagination.appendChild(firstPage);
 
@@ -404,7 +408,7 @@
                 pageButton.textContent = i;
                 pageButton.onclick = () => {
                     currentPage = i;
-                    loadAudioList();
+                    renderAudioList();
                 };
                 pagination.appendChild(pageButton);
             }
@@ -422,12 +426,11 @@
                 lastPage.textContent = totalPages;
                 lastPage.onclick = () => {
                     currentPage = totalPages;
-                    loadAudioList();
+                    renderAudioList();
                 };
                 pagination.appendChild(lastPage);
             }
 
-            // Next button
             const nextButton = document.createElement('button');
             nextButton.className = 'pagination-button';
             nextButton.textContent = '»';
@@ -435,14 +438,14 @@
             nextButton.onclick = () => {
                 if (currentPage < totalPages) {
                     currentPage++;
-                    loadAudioList();
+                    renderAudioList();
                 }
             };
             pagination.appendChild(nextButton);
         }
 
-        // Fetch and display audio list with pagination
-        async function loadAudioList() {
+        // Fetch and store audio list
+        async function fetchAudioList() {
             try {
                 const response = await fetch('https://api.ausynclab.org/api/v1/speech/', {
                     method: 'GET',
@@ -456,45 +459,9 @@
                     throw new Error(`Lỗi khi lấy danh sách audio: ${JSON.stringify(errorData)}`);
                 }
                 const data = await response.json();
-                const audios = data.result;
-                audioList.innerHTML = '';
-
-                if (audios.length === 0) {
-                    const warning = document.createElement('p');
-                    warning.className = 'text-yellow-300 text-sm';
-                    warning.textContent = 'Không có audio nào trong danh sách.';
-                    audioList.appendChild(warning);
-                    pagination.innerHTML = '';
-                    return;
-                }
-
-                // Calculate pagination
-                const startIndex = (currentPage - 1) * itemsPerPage;
-                const endIndex = startIndex + itemsPerPage;
-                const paginatedAudios = audios.slice(startIndex, endIndex);
-
-                paginatedAudios.forEach(audio => {
-                    const audioCard = document.createElement('div');
-                    audioCard.className = 'glass-effect p-4';
-                    audioCard.innerHTML = `
-                        <p><strong>Tên:</strong> ${audio.name}</p>
-                        <p><strong>Giọng:</strong> ${audio.voice_name}</p>
-                        <p><strong>Tốc độ:</strong> ${audio.speed}</p>
-                        <p><strong>Ngày tạo:</strong> ${new Date(audio.created_at).toLocaleString('vi-VN')}</p>
-                        <p><strong>Trạng thái:</strong> ${audio.state}</p>
-                        <button onclick="playAudio('${audio.audio_url}')" 
-                            class="w-full py-2 btn-primary rounded-lg font-semibold mt-2">
-                            Phát Audio
-                        </button>
-                        <button onclick="deleteAudio(${audio.id})" 
-                            class="w-full py-2 btn-danger rounded-lg font-semibold mt-2">
-                            Xóa Audio
-                        </button>
-                    `;
-                    audioList.appendChild(audioCard);
-                });
-
-                renderPagination(audios.length);
+                allAudios = data.result; // Store all audios
+                currentPage = 1; // Reset to first —
+                renderAudioList();
             } catch (error) {
                 console.error('Lỗi:', error);
                 const warning = document.createElement('p');
@@ -503,6 +470,47 @@
                 audioList.appendChild(warning);
                 pagination.innerHTML = '';
             }
+        }
+
+        // Render audio list from stored data
+        function renderAudioList() {
+            audioList.innerHTML = '';
+
+            if (allAudios.length === 0) {
+                const warning = document.createElement('p');
+                warning.className = 'text-yellow-300 text-sm';
+                warning.textContent = 'Không có audio nào trong danh sách.';
+                audioList.appendChild(warning);
+                pagination.innerHTML = '';
+                return;
+            }
+
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const paginatedAudios = allAudios.slice(startIndex, endIndex);
+
+            paginatedAudios.forEach(audio => {
+                const audioCard = document.createElement('div');
+                audioCard.className = 'glass-effect p-4';
+                audioCard.innerHTML = `
+                    <p><strong>Tên:</strong> ${audio.name}</p>
+                    <p><strong>Giọng:</strong> ${audio.voice_name}</p>
+                    <p><strong>Tốc độ:</strong> ${audio.speed}</p>
+                    <p><strong>Ngày tạo:</strong> ${new Date(audio.created_at).toLocaleString('vi-VN')}</p>
+                    <p><strong>Trạng thái:</strong> ${audio.state}</p>
+                    <button onclick="playAudio('${audio.audio_url}')" 
+                        class="w-full py-2 btn-primary rounded-lg font-semibold mt-2">
+                        Phát
+                    </button>
+                    <button onclick="deleteAudio(${audio.id})" 
+                        class="w-full py-2 btn-danger rounded-lg font-semibold mt-2">
+                        Xóa Audio
+                    </button>
+                `;
+                audioList.appendChild(audioCard);
+            });
+
+            renderPagination(allAudios.length);
         }
 
         // Play audio
@@ -530,7 +538,11 @@
                     throw new Error(`Lỗi khi xóa audio: ${JSON.stringify(errorData)}`);
                 }
                 alert('Xóa audio thành công!');
-                loadAudioList();
+                allAudios = allAudios.filter(audio => audio.id !== audioId); // Update cached list
+                if ((currentPage - 1) * itemsPerPage >= allAudios.length && currentPage > 1) {
+                    currentPage--; // Adjust page if last item on page is deleted
+                }
+                renderAudioList();
             } catch (error) {
                 console.error('Lỗi:', error);
                 alert(`Lỗi khi xóa audio: ${error.message}. Vui lòng liên hệ AusyncLab để xác nhận endpoint DELETE.`);
