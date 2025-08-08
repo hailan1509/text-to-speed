@@ -66,27 +66,69 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        /* Pagination Styles */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+        .pagination-button {
+            min-width: 2.5rem;
+            height: 2.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            font-size: 1rem;
+            transition: background 0.2s;
+            cursor: pointer;
+        }
+        .pagination-button:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.4);
+        }
+        .pagination-button.active {
+            background: #ff6b6b;
+            font-weight: bold;
+        }
+        .pagination-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .pagination-ellipsis {
+            color: white;
+            font-size: 1rem;
+            padding: 0.5rem;
+        }
+        @media (max-width: 640px) {
+            .pagination {
+                gap: 0.25rem;
+            }
+            .pagination-button {
+                min-width: 2rem;
+                height: 2rem;
+                font-size: 0.875rem;
+            }
+        }
     </style>
 </head>
 <body class="text-white">
     <nav class="w-full bg-transparent p-4">
         <div class="container mx-auto max-w-md flex justify-around">
-            <button id="nav-tts" class="nav-link px-4 py-2 rounded-lg font-semibold text-lg active">Text-to-Speech</button>
+            <button id="nav-tts" class="nav-link px-4 py-2 rounded-lg font-semibold text-lg active">Chuyển đổi</button>
             <button id="nav-audio" class="nav-link px-4 py-2 rounded-lg font-semibold text-lg">Quản lý Audio</button>
         </div>
     </nav>
 
     <div class="container mx-auto px-4 py-8 max-w-md">
-        <div class="warning">
-            <p class="text-yellow-300 text-sm">
-                CẢNH BÁO: Nhúng API Key trong JavaScript không an toàn vì nó có thể bị lộ qua Developer Tools. Chỉ dùng cho thử nghiệm cá nhân. Hãy sử dụng proxy server để bảo mật!
-            </p>
-        </div>
-
         <!-- Trang Text-to-Speech -->
         <div id="page-tts">
-            <h1 class="text-3xl font-bold text-center mb-6">Giọng Nói Hoạt Ngôn</h1>
-            
             <div class="glass-effect p-6 mb-6">
                 <textarea id="textInput" 
                     class="w-full h-40 p-4 text-gray-800 rounded-lg bg-white/90 focus:outline-none focus:ring-2 focus:ring-pink-400 resize-none"
@@ -97,7 +139,6 @@
                 <label for="voiceSelect" class="block text-sm font-medium mb-2">Chọn giọng nói:</label>
                 <select id="voiceSelect" 
                     class="w-full p-2 rounded-lg bg-white/90 text-gray-800 focus:outline-none focus:ring-2 focus:ring-pink-400">
-                    <!-- Voice options will be dynamically populated -->
                 </select>
             </div>
 
@@ -118,9 +159,8 @@
         <!-- Trang Quản lý Audio -->
         <div id="page-audio" class="hidden">
             <h1 class="text-3xl font-bold text-center mb-6">Quản lý Audio</h1>
-            <div id="audioList" class="space-y-4">
-                <!-- Audio items will be dynamically populated -->
-            </div>
+            <div id="audioList" class="space-y-4"></div>
+            <div id="pagination" class="pagination"></div>
             <button onclick="loadAudioList()" 
                 class="w-full py-3 btn-primary rounded-lg font-semibold text-lg mt-6">
                 Tải Lại Danh Sách
@@ -141,6 +181,11 @@
         const audioList = document.getElementById('audioList');
         const speakButton = document.getElementById('speakButton');
         const speakSpinner = document.getElementById('speakSpinner');
+        const pagination = document.getElementById('pagination');
+
+        // Pagination state
+        let currentPage = 1;
+        const itemsPerPage = 5;
 
         // Navigation
         navTts.addEventListener('click', () => {
@@ -199,7 +244,7 @@
                     const option = document.createElement('option');
                     option.value = voice.id;
                     option.textContent = `${voice.name} (Nữ, Trẻ trung, ${voice.use_case === 'ADVERTISEMENT' ? 'Quảng cáo' : 'Thân mật'})`;
-                    if (voice.id === 373762) { // Ái My
+                    if (voice.id === 373762) {
                         option.selected = true;
                     }
                     voiceSelect.appendChild(option);
@@ -228,7 +273,6 @@
                 return;
             }
 
-            // Show loading state
             speakButton.disabled = true;
             speakSpinner.classList.remove('hidden');
 
@@ -236,7 +280,6 @@
             const speed = parseFloat(rateInput.value);
 
             try {
-                // Step 1: Create audio job
                 const createResponse = await fetch('https://api.ausynclab.org/api/v1/speech/text-to-speech', {
                     method: 'POST',
                     headers: {
@@ -261,7 +304,6 @@
                 const createData = await createResponse.json();
                 const audioId = createData.result.audio_id;
 
-                // Step 2: Poll audio status until SUCCEED
                 let audioUrl = null;
                 const maxAttempts = 10;
                 let attempts = 0;
@@ -296,7 +338,6 @@
                     throw new Error('Hết thời gian chờ audio. Vui lòng thử lại.');
                 }
 
-                // Step 3: Play audio
                 const audio = new Audio(audioUrl);
                 audio.play().catch(error => {
                     throw new Error(`Lỗi phát audio: ${error.message}`);
@@ -305,16 +346,102 @@
                 console.error('Lỗi:', error);
                 alert(`Đã xảy ra lỗi khi chuyển văn bản thành giọng nói: ${error.message}. Vui lòng kiểm tra kết nối mạng hoặc liên hệ AusyncLab.`);
             } finally {
-                // Hide loading state
                 speakButton.disabled = false;
                 speakSpinner.classList.add('hidden');
             }
         }
 
-        // Load voices on page load
-        loadVoices();
+        // Render pagination
+        function renderPagination(totalItems) {
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+            pagination.innerHTML = '';
 
-        // Fetch and display audio list
+            if (totalPages <= 1) return;
+
+            // Previous button
+            const prevButton = document.createElement('button');
+            prevButton.className = 'pagination-button';
+            prevButton.textContent = '«';
+            prevButton.disabled = currentPage === 1;
+            prevButton.onclick = () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    loadAudioList();
+                }
+            };
+            pagination.appendChild(prevButton);
+
+            // Page numbers with ellipsis
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+            if (endPage - startPage + 1 < maxVisiblePages) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+
+            if (startPage > 1) {
+                const firstPage = document.createElement('button');
+                firstPage.className = 'pagination-button';
+                firstPage.textContent = '1';
+                firstPage.onclick = () => {
+                    currentPage = 1;
+                    loadAudioList();
+                };
+                pagination.appendChild(firstPage);
+
+                if (startPage > 2) {
+                    const ellipsis = document.createElement('span');
+                    ellipsis.className = 'pagination-ellipsis';
+                    ellipsis.textContent = '...';
+                    pagination.appendChild(ellipsis);
+                }
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                const pageButton = document.createElement('button');
+                pageButton.className = `pagination-button ${i === currentPage ? 'active' : ''}`;
+                pageButton.textContent = i;
+                pageButton.onclick = () => {
+                    currentPage = i;
+                    loadAudioList();
+                };
+                pagination.appendChild(pageButton);
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    const ellipsis = document.createElement('span');
+                    ellipsis.className = 'pagination-ellipsis';
+                    ellipsis.textContent = '...';
+                    pagination.appendChild(ellipsis);
+                }
+
+                const lastPage = document.createElement('button');
+                lastPage.className = 'pagination-button';
+                lastPage.textContent = totalPages;
+                lastPage.onclick = () => {
+                    currentPage = totalPages;
+                    loadAudioList();
+                };
+                pagination.appendChild(lastPage);
+            }
+
+            // Next button
+            const nextButton = document.createElement('button');
+            nextButton.className = 'pagination-button';
+            nextButton.textContent = '»';
+            nextButton.disabled = currentPage === totalPages;
+            nextButton.onclick = () => {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    loadAudioList();
+                }
+            };
+            pagination.appendChild(nextButton);
+        }
+
+        // Fetch and display audio list with pagination
         async function loadAudioList() {
             try {
                 const response = await fetch('https://api.ausynclab.org/api/v1/speech/', {
@@ -337,10 +464,16 @@
                     warning.className = 'text-yellow-300 text-sm';
                     warning.textContent = 'Không có audio nào trong danh sách.';
                     audioList.appendChild(warning);
+                    pagination.innerHTML = '';
                     return;
                 }
 
-                audios.forEach(audio => {
+                // Calculate pagination
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const endIndex = startIndex + itemsPerPage;
+                const paginatedAudios = audios.slice(startIndex, endIndex);
+
+                paginatedAudios.forEach(audio => {
                     const audioCard = document.createElement('div');
                     audioCard.className = 'glass-effect p-4';
                     audioCard.innerHTML = `
@@ -360,12 +493,15 @@
                     `;
                     audioList.appendChild(audioCard);
                 });
+
+                renderPagination(audios.length);
             } catch (error) {
                 console.error('Lỗi:', error);
                 const warning = document.createElement('p');
                 warning.className = 'text-yellow-300 text-sm';
                 warning.textContent = `Lỗi khi tải danh sách audio: ${error.message}. Vui lòng kiểm tra kết nối mạng hoặc liên hệ AusyncLab.`;
                 audioList.appendChild(warning);
+                pagination.innerHTML = '';
             }
         }
 
@@ -378,7 +514,7 @@
             });
         }
 
-        // Delete audio (assumed endpoint)
+        // Delete audio
         async function deleteAudio(audioId) {
             if (!confirm('Bạn có chắc muốn xóa audio này?')) return;
             try {
@@ -400,6 +536,9 @@
                 alert(`Lỗi khi xóa audio: ${error.message}. Vui lòng liên hệ AusyncLab để xác nhận endpoint DELETE.`);
             }
         }
+
+        // Load voices on page load
+        loadVoices();
     </script>
 </body>
 </html>
